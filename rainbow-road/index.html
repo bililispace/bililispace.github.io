@@ -4,25 +4,148 @@
   <meta charset="UTF-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Rainbow Road</title>
+  <title>Divergence Meter</title>
   <style>
-    html, body, img { margin: 0; padding: 0; }
-    img { width: 100%; display: block; }
+    html, body, .container {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      position: relative;
+      overflow: hidden;
+    }
+    .background {
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      background-color: #fff;
+      transition: background-color 1.2s linear;
+    }
+    video, canvas {
+      width: 200%;
+      opacity: 0;
+    }
+    canvas {
+      top: 0;
+      left: 0;
+      position: absolute;
+      transform: scale(.5);
+      transform-origin: 0 0;
+    }
+    .trigger {
+      top: 0;
+      left: 0;
+      border: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      opacity: 0;
+    }
   </style>
 </head>
 <body>
-  <img id="img1" src="./01.jpg" alt="">
-  <img id="img2" src="./02.jpg" alt="" style="display: none">
+  <div class="container">
+    <div class="background"></div>
+    <video src="./divergence-meter.mp4" playsInline="true" muted></video>
+    <canvas></canvas>
+    <button class="trigger"></button>
+  </div>
   <script>
-    var img1 = document.querySelector('#img1');
-    var img2 = document.querySelector('#img2');
-    img1.addEventListener('click', function() {
-      img1.style.display = 'none';
-      img2.style.display = 'block';
-    });
-    img2.addEventListener('click', function() {
-      img1.style.display = 'block';
-      img2.style.display = 'none';
+    const background = document.querySelector('.background');
+    const trigger = document.querySelector('.trigger');
+    const video = document.querySelector('video');
+    const canvas = document.querySelector('canvas');
+    const context = canvas.getContext('2d');
+
+    background.style.backgroundColor = '#210501';
+
+    fetch('./divergence-meter.mp4').then((response) => {
+      return response.blob();
+    }).then((blob) => {
+      const url = URL.createObjectURL(blob);
+
+      let isFirstClick = true;
+      let isFirstPlay = true;
+      let isInit = false;
+      let isRecord = false;
+      let isNormalClick = false;
+      let isFramePlay = false;
+
+      let currentFrame = [];
+      let nextFrame = [];
+
+      trigger.addEventListener('click', () => {
+        if (isFirstClick) {
+          canvas.style.opacity = 1;
+          isFirstClick = false;
+          isRecord = true;
+          video.play();
+        }
+        if (isNormalClick) {
+          isNormalClick = false;
+          isFramePlay = true;
+        }
+      });
+
+      video.addEventListener('ended', () => {
+        isRecord = false;
+        isFirstPlay = false;
+        isNormalClick = true;
+        while (currentFrame.length && currentFrame[0].data[0] === 0) {
+          currentFrame.shift();
+        }
+      });
+
+      video.src = url;
+
+      const loop = (callback) => {
+        const raf = (timestamp) => {
+        callback(timestamp);
+        requestAnimationFrame(raf);
+      };
+      requestAnimationFrame(raf);
+      };
+
+      let width = 0;
+      let height = 0;
+
+      loop((timestamp) => {
+        if (isFirstPlay) {
+          if (width && height) {
+            canvas.width = width;
+            canvas.height = height;
+            canvas.style.height = `${canvas.offsetWidth * height / width}px`;
+            isInit = true;
+          } else {
+            width = width || video.videoWidth;
+            height = height || video.videoHeight;
+          }
+          if (isInit) {
+            context.drawImage(video, 0, 0, width, height);
+          }
+          if (isRecord) {
+            currentFrame.push(context.getImageData(0, 0, width, height));
+            console.log(currentFrame.length);
+          }
+        }
+        if (isFramePlay) {
+          if (currentFrame.length) {
+            console.log(currentFrame.length);
+            const frame = currentFrame.pop();
+            context.putImageData(frame, 0, 0);
+            nextFrame.push(frame);
+          } else {
+            const anonymous = currentFrame;
+            currentFrame = nextFrame;
+            nextFrame = anonymous;
+            isFramePlay = false;
+            isNormalClick = true;
+          }
+        }
+      });
     });
   </script>
 </body>
